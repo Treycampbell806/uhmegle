@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uhmegle-like Video Chat</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            width: 100%;
+            max-width: 800px;
+            background: #ffffff;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .header {
+            background-color: #4caf50;
+            color: #ffffff;
+            padding: 20px;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .content h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .content p {
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .content button {
+            font-size: 1rem;
+            padding: 10px 20px;
+            background-color: #4caf50;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .content button:hover {
+            background-color: #45a049;
+        }
+
+        .video-chat {
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 500px;
+            background-color: #f9f9f9;
+        }
+
+        .video-container {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            background-color: #000;
+            flex: 1;
+        }
+
+        video {
+            max-width: 45%;
+            max-height: 100%;
+            border-radius: 5px;
+            border: 2px solid #4caf50;
+        }
+
+        .controls {
+            background-color: #f4f4f4;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .controls button {
+            padding: 10px;
+            background-color: #4caf50;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .controls button:hover {
+            background-color: #45a049;
+        }
+
+        .controls button.disconnect {
+            background-color: #f44336;
+        }
+
+        .controls button.disconnect:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">Welcome to Uhmegle-like Video Chat</div>
+        <div class="content" id="landingPage">
+            <h1>Connect with random people!</h1>
+            <p>Click the button below to start chatting with random users instantly.</p>
+            <button onclick="startChatSession()">Start Chat</button>
+        </div>
+        <div class="video-chat" id="chatContainer">
+            <div class="video-container">
+                <video id="localVideo" autoplay muted></video>
+                <video id="remoteVideo" autoplay></video>
+            </div>
+            <div class="controls">
+                <button onclick="startNewChat()">Next</button>
+                <button class="disconnect" onclick="disconnectChat()">Disconnect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const landingPage = document.getElementById('landingPage');
+        const chatContainer = document.getElementById('chatContainer');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+
+        let peerConnection;
+        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        function startChatSession() {
+            landingPage.style.display = 'none';
+            chatContainer.style.display = 'flex';
+            startNewChat();
+        }
+
+        function setupPeerConnection() {
+            peerConnection = new RTCPeerConnection(configuration);
+
+            peerConnection.ontrack = event => {
+                remoteVideo.srcObject = event.streams[0];
+            };
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log('New ICE candidate:', event.candidate);
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    localVideo.srcObject = stream;
+                    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+                })
+                .catch(error => console.error('Error accessing media devices.', error));
+        }
+
+        function startNewChat() {
+            disconnectChat();
+            setupPeerConnection();
+            peerConnection.createOffer()
+                .then(offer => peerConnection.setLocalDescription(offer))
+                .then(() => {
+                    console.log('Offer created:', peerConnection.localDescription);
+                    simulateSignaling(peerConnection.localDescription);
+                });
+        }
+
+        function disconnectChat() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+                remoteVideo.srcObject = null;
+            }
+        }
+
+        function simulateSignaling(offer) {
+            const remotePeer = new RTCPeerConnection(configuration);
+
+            remotePeer.ontrack = event => {
+                remoteVideo.srcObject = event.streams[0];
+            };
+
+            remotePeer.onicecandidate = event => {
+                if (event.candidate) {
+                    peerConnection.addIceCandidate(event.candidate);
+                }
+            };
+
+            remotePeer.setRemoteDescription(offer)
+                .then(() => remotePeer.createAnswer())
+                .then(answer => remotePeer.setLocalDescription(answer))
+                .then(() => {
+                    peerConnection.setRemoteDescription(remotePeer.localDescription);
+                });
+
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    remotePeer.addTrack(stream.getTracks()[0], stream);
+                });
+        }
+    </script>
+</body>
+</html>
